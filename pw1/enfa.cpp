@@ -1,10 +1,8 @@
 #include <iostream>
 #include <vector>
 #include <array>
-#include <string>
 #include <stack>
 #include <unordered_set>
-#include <algorithm>
 
 enum RESULT
 {

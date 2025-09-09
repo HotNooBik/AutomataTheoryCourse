@@ -1,6 +1,5 @@
 #include <iostream>
 #include <array>
-#include <string>
 
 enum RESULT {
     UNKNOWN_SYMBOL_ERR      = 0,

@@ -1,10 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <array>
-#include <string>
-#include <stack>
 #include <unordered_set>
-#include <algorithm>
 
 enum RESULT
 {
@@ -108,7 +105,6 @@ int main(int argc, char *argv[])
     BuildNFA();
 
     std::cout << "Enter a string with 'a's and 'b's:\nPress Enter Key to stop\n";
-
     char ch;
     int result = IsAccepting(g_CurrentStates) ? REACHED_FINAL_STATE : NOT_REACHED_FINAL_STATE;
 
@@ -123,7 +119,6 @@ int main(int argc, char *argv[])
     }
 
     bool accepted = IsAccepting(g_CurrentStates);
-
     if (result == REACHED_FINAL_STATE)
     {
         std::cout << "\nAccepted! The string belongs to the language b* a* ({a^n : n >= 1} U {b^m a^k : m,k >= 0}).\n";
@@ -132,6 +127,5 @@ int main(int argc, char *argv[])
     {
         std::cout << "\nRejected! The string does not belong the language b* a* (({a^n : n >= 1} U {b^m a^k : m,k >= 0}).\n";
     }
-
     return 0;
 }
