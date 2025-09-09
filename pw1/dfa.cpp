@@ -27,7 +27,7 @@ std::array<int, ACCEPTED_STATES> g_Accepted_states {
 };
 
 // The set Sigma
-std::array<char, ALPHABET_CHARCTERS> g_alphabet { '0', '1' };
+std::array<char, ALPHABET_CHARCTERS> g_Alphabet { '0', '1' };
 
 // Transition function
 int g_Transition_Table[TOTAL_STATES][ALPHABET_CHARCTERS] = {};
@@ -106,7 +106,7 @@ int DFA(char current_symbol) {
 
     int symbol_index = -1;
 
-    for (char symbol : g_alphabet) {
+    for (char symbol : g_Alphabet) {
         if (symbol == current_symbol) {
             symbol_index = (symbol == '0') ? 0 : 1;
         }
@@ -127,7 +127,7 @@ int DFA(char current_symbol) {
 int main()
 {
     SetDFA_Transitions();
-    std::cout << "Enter a string with '0' s and '1's:\nPress Enter Key to stop\n";
+    std::cout << "Enter a string with '0's and '1's:\nPress Enter Key to stop\n";
 
     char ch;
     int result = NOT_REACHED_FINAL_STATE;
@@ -137,9 +137,9 @@ int main()
     }
 
     if (result == REACHED_FINAL_STATE) {
-        std::cout << "\nAccepted! The fifth symbol from the right is 1\n";
+        std::cout << "\nAccepted! The fifth symbol from the right is 1.\n";
     } else {
-        std::cout << "\nRejected! The fifth symbol from the right is not 1\n";
+        std::cout << "\nRejected! The fifth symbol from the right is not 1.\n";
     }
 
     return 0;
