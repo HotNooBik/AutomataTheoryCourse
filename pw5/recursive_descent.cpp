@@ -1,68 +1,54 @@
-/*! \file    rd.cpp
- *  \brief   Recursive descent parser for logical expressions.
- *
- *  \details Recursive descent parser for LL(1) grammar recognizing sequences of logical expressions separated by ';'.
- *           Expressions include integer constants (decimal, binary, hex), variables (1-2 letters), operations (~, *, +, =),
- *           and parentheses. Priorities: ~ > * > + > = (decreasing). Associativity: left for * and +; right for ~ and =.
- *           Left side of assignment is only a variable name.
- *
- *           Grammar (in terms of tokens):
- *           S -> LIST
- *           LIST -> EXPR LIST_TAIL
- *           LIST_TAIL -> ; EXPR LIST_TAIL | ε
- *           EXPR -> ~ UNARY | LPAR EXPR RPAR EXPR_TAIL | CONST EXPR_TAIL | ID EXPR_TAIL_ID
- *           EXPR_TAIL -> MUL_TAIL ADD_TAIL
- *           EXPR_TAIL_ID -> = EXPR | MUL_TAIL ADD_TAIL
- *           ADD_TAIL -> + MUL ADD_TAIL | ε
- *           MUL_TAIL -> * UNARY MUL_TAIL | ε
- *           UNARY -> ~ UNARY | PRIMARY
- *           PRIMARY -> LPAR EXPR RPAR | CONST | ID
- *
- *           Tokens: ID, CONST, NEG(~), MUL(*), ADD(+), ASSIGN(=), LPAR((), RPAR()), SEMI(;), EOP
- *
- *           Formal proof of LL(1):
- *           The grammar is LL(1) because:
- *           1. No left recursion: All productions are right-recursive or terminal-starting.
- *           2. For each nonterminal, the FIRST sets of alternative productions are disjoint.
- *           3. For nullable productions (ε), the FOLLOW set is disjoint from FIRST of other alternatives.
- *
- *           FIRST sets:
- *           - S: {~, (, CONST, ID}
- *           - LIST: {~, (, CONST, ID}
- *           - LIST_TAIL: {;, ε}
- *           - EXPR: {~, (, CONST, ID}
- *           - EXPR_TAIL: {*, +, ε}
- *           - EXPR_TAIL_ID: {=, *, +, ε}
- *           - ADD_TAIL: {+, ε}
- *           - MUL_TAIL: {*, ε}
- *           - UNARY: {~, (, CONST, ID}
- *           - PRIMARY: {(, CONST, ID}
- *
- *           FOLLOW sets:
- *           - S: {$}
- *           - LIST: {$}
- *           - LIST_TAIL: {$}
- *           - EXPR: {;, ), $}
- *           - EXPR_TAIL: {;, ), $}
- *           - EXPR_TAIL_ID: {;, ), $}
- *           - ADD_TAIL: {;, ), $}
- *           - MUL_TAIL: {+, ;, ), $}
- *           - UNARY: {*, +, =, ;, ), $}
- *           - PRIMARY: {*, +, =, ;, ), $}
- *
- *           Select sets (predictive) for alternatives are disjoint:
- *           - For LIST_TAIL: ';' -> {;}, ε -> FOLLOW(LIST_TAIL) = {$} (disjoint).
- *           - For EXPR: ~ -> {~}, ( -> {(}, CONST -> {CONST}, ID -> {ID} (disjoint tokens).
- *           - For EXPR_TAIL_ID: = -> {=}, MUL_TAIL ADD_TAIL -> {*, + , ε} but since MUL_TAIL ADD_TAIL starts with * or + or ε, and ε's FOLLOW disjoint from =.
- *             Actually, the alternative for MUL_TAIL ADD_TAIL is chosen when lookahead in FIRST(MUL_TAIL ADD_TAIL) = {*, +, ε}, but since ε not first, it's {*, +}, and = is separate.
- *           - Similar for ADD_TAIL: + -> {+}, ε -> FOLLOW = {;, ), $} (disjoint).
- *           - MUL_TAIL: * -> {*}, ε -> FOLLOW = {+, ;, ), $} (disjoint).
- *           - UNARY: ~ -> {~}, PRIMARY -> {(, CONST, ID} (disjoint).
- *           - PRIMARY: ( -> {(}, CONST -> {CONST}, ID -> {ID} (disjoint).
- *           No multiple entries in the LL(1) parsing table, hence LL(1).
- *
- *           \license Distributed under the terms of the Zlib license,
- *                    see https://www.zlib.net/zlib_license.html
+/*! 
+ *      LIST -> ASSIGN LIST_TAIL
+ *      LIST_TAIL -> ε
+ *      LIST_TAIL -> ; ASSIGN LIST_TAIL
+ *      ASSIGN -> EXPR ASSIGN_TAIL
+ *      ASSIGN_TAIL -> = ASSIGN
+ *      ASSIGN_TAIL -> ε
+ * 
+ *      EXPR -> NEXT_EXPR ADD
+ *      ADD -> | NEXT_EXPR ADD
+ *      ADD -> ε
+ * 
+ *      NEXT_EXPR -> UNARY MUL
+ *      MUL -> & UNARY MUL
+ *      MUL -> ε
+ * 
+ *      UNARY -> ~ UNARY
+ *      UNARY -> PRIMARY
+ * 
+ *      PRIMARY -> ID
+ *      PRIMARY -> CONST
+ *      PRIMARY -> ( EXPR )
+ * 
+ *      ID -> ONE_SYM SEC_SYM
+ *      SEC_SYM -> ONE_SYM
+ *      SEC_SYM -> ε
+ *      ONE_SYM -> a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v ,w ,x, y, z
+ * 
+ *      CONST -> 0 CONST_TAIL
+ *      CONST -> NZDIGIT DIGIT_TAIL
+ *      CONST_TAIL -> b BINARY
+ *      CONST_TAIL -> x HEX
+ *      CONST_TAIL -> DIGIT_TAIL
+ * 
+ *      BINARY -> BIT BIT_TAIL
+ *      BIT_TAIL -> BIT BIT_TAIL
+ *      BIT_TAIL -> ε
+ *      BIT -> 0, 1
+ * 
+ *      HEX -> HEXDIGIT HEX_TAIL
+ *      HEX_TAIL -> HEXDIGIT HEX_TAIL
+ *      HEX_TAIL -> ε
+ *      HEXDIGIT -> DIGIT
+ *      HEXDIGIT -> a, b, c, d, e, f
+ * 
+ *      DIGIT_TAIL -> DIGIT DIGIT_TAIL
+ *      DIGIT_TAIL -> ε
+ * 
+ *      NZDIGIT -> 1, 2, 3, 4, 5, 6, 7, 8, 9
+ *      DIGIT -> NZDIGIT
+ *      DIGIT -> 0
  */
 
 #include <iostream>
@@ -70,41 +56,60 @@
 #include <cstdlib>
 #include <cstring>
 
-// Terminals (tokens)
-const int NEG = 0;      // ~
-const int MUL = 1;      // *
-const int ADD = 2;      // +
-const int ASSIGN = 3;   // =
-const int LPAR = 4;     // (
-const int RPAR = 5;     // )
-const int SEMI = 6;     // ;
-const int ID = 7;
-const int CONST = 8;
+// Terminals
+const int NEG_SIGN = 0;      // ~
+const int MUL_SIGN = 1;      // &
+const int ADD_SIGN = 2;      // |
+const int ASSIGN_SIGN = 3;   // =
+const int LPAR_SIGN = 4;     // (
+const int RPAR_SIGN = 5;     // )
+const int SEMI_SIGN = 6;     // ;
+const int ID_SIGN = 7;       // 1-2 symbols [a-zA-Z] (excep a,b,c,d,e,f,g,x)
+const int DIGIT_SIGN = 8;    // 2, 3, 4, 5, 6, 7, 8, 9 (excep 0,1)
+const int ZERO_SIGN = 9;     // 0
+const int BIT_SIGN = 10;     // 1
+const int HEX_SIGN = 11;     // a, c, d, e, f (except b)
+const int B_SIGN = 12;       // b
+const int X_SIGN = 13;       // x
 
 // End of program
-const int EOP = 9;
+const int EOP = 14;
 
-const int UNDEF = 10;
+const int UNDEF = 15;
 
-// Current lexeme (token)
+// Lexeme class (token)
 int lexeme = 0;
 
-// Non-terminals
-void S();
+// Non terminals
 void LIST();
 void LIST_TAIL();
+void ASSIGN();
+void ASSIGN_TAIL();
 void EXPR();
-void EXPR_TAIL();
-void EXPR_TAIL_ID();
-void ADD_TAIL();
-void MUL_TAIL();
+void ADD();
+void NEXT_EXPR();
+void MUL();
 void UNARY();
 void PRIMARY();
+void ID();
+void ONE_SYM();
+void SEC_SYM();
+void CONST();
+void CONST_TAIL();
+void BINARY();
+void BIT();
+void BIT_TAIL();
+void HEX();
+void HEXDIGIT();
+void HEX_TAIL();
+void DIGIT_TAIL();
+void DIGIT();
+void NZDIGIT();
 
-// Error handling
+// Reject input line
 void error();
 
-// Look ahead token
+// Look ahead lexeme
 int get_token();
 
 char g_inputBuffer[1024] = "";
@@ -125,7 +130,7 @@ int main(int argc, char* argv[])
     g_prog = g_inputBuffer;
 
     lexeme = get_token();
-    S();
+    LIST();
     if (lexeme == EOP)
         std::cout << "Accepted.\n";
     else
@@ -134,134 +139,261 @@ int main(int argc, char* argv[])
     return 0;
 }
 
-void S()
-{
-    LIST();
-}
-
 void LIST()
 {
-    EXPR();
+    ASSIGN();
     LIST_TAIL();
 }
 
 void LIST_TAIL()
 {
-    if (lexeme == SEMI)
+    if (lexeme == SEMI_SIGN)
     {
         lexeme = get_token();
-        EXPR();
+        ASSIGN();
         LIST_TAIL();
     }
-    // else ε (if lexeme in FOLLOW(LIST_TAIL) = EOP)
-    else if (lexeme != EOP)
-        error();
+    // Или ε
+}
+
+void ASSIGN()
+{
+    EXPR();
+    ASSIGN_TAIL();
+}
+
+void ASSIGN_TAIL()
+{
+    if (lexeme == ASSIGN_SIGN)
+    {
+        lexeme = get_token();
+        ASSIGN();
+    }
+    // Или ε
 }
 
 void EXPR()
 {
-    if (lexeme == NEG)
+    NEXT_EXPR();
+    ADD();
+}
+
+void ADD()
+{
+    if (lexeme == ADD_SIGN)
+    {
+        lexeme = get_token();
+        NEXT_EXPR();
+        ADD();
+    }
+    // Или ε
+}
+
+void NEXT_EXPR()
+{
+    UNARY();
+    MUL();
+}
+
+void MUL()
+{
+    if (lexeme == MUL_SIGN)
     {
         lexeme = get_token();
         UNARY();
+        MUL();
     }
-    else if (lexeme == LPAR)
-    {
-        lexeme = get_token();
-        EXPR();
-        if (lexeme != RPAR)
-            error();
-        lexeme = get_token();
-        EXPR_TAIL();
-    }
-    else if (lexeme == CONST)
-    {
-        lexeme = get_token();
-        EXPR_TAIL();
-    }
-    else if (lexeme == ID)
-    {
-        lexeme = get_token();
-        EXPR_TAIL_ID();
-    }
-    else
-        error();
-}
-
-void EXPR_TAIL()
-{
-    MUL_TAIL();
-    ADD_TAIL();
-}
-
-void EXPR_TAIL_ID()
-{
-    if (lexeme == ASSIGN)
-    {
-        lexeme = get_token();
-        EXPR();
-    }
-    else
-    {
-        MUL_TAIL();
-        ADD_TAIL();
-    }
-}
-
-void ADD_TAIL()
-{
-    if (lexeme == ADD)
-    {
-        lexeme = get_token();
-        UNARY();
-        ADD_TAIL();
-    }
-    // else ε
-}
-
-void MUL_TAIL()
-{
-    if (lexeme == MUL)
-    {
-        lexeme = get_token();
-        UNARY();
-        MUL_TAIL();
-    }
-    // else ε
+    // Или ε
 }
 
 void UNARY()
 {
-    if (lexeme == NEG)
+    if (lexeme == NEG_SIGN)
     {
         lexeme = get_token();
         UNARY();
     }
     else
+    {
         PRIMARY();
+    }
 }
 
 void PRIMARY()
 {
-    if (lexeme == LPAR)
+    if (lexeme == ID_SIGN || lexeme == HEX_SIGN || lexeme == B_SIGN || lexeme == X_SIGN)
+    {   
+        ID();
+    } 
+    else if (lexeme == ZERO_SIGN || lexeme == BIT_SIGN || lexeme == DIGIT_SIGN)
+    {   
+        CONST();
+    }
+    else if (lexeme == LPAR_SIGN)
     {
         lexeme = get_token();
         EXPR();
-        if (lexeme != RPAR)
+        if (lexeme != RPAR_SIGN)
+        {
             error();
+        }
         lexeme = get_token();
     }
-    else if (lexeme == CONST)
+    else
+    {
+        error();
+    }
+}
+
+void ID()
+{
+    ONE_SYM();
+    SEC_SYM();
+}
+
+void ONE_SYM(){
+    if (lexeme != ID_SIGN && lexeme != HEX_SIGN && lexeme != B_SIGN && lexeme != X_SIGN) {
+        error();
+    }
+    lexeme = get_token();
+}
+
+void SEC_SYM()
+{
+    if (lexeme == ID_SIGN || lexeme == HEX_SIGN || lexeme == B_SIGN || lexeme == X_SIGN) {
+        ONE_SYM();
+    }
+    // Или ε
+}
+
+void CONST()
+{
+    if (lexeme == ZERO_SIGN)
     {
         lexeme = get_token();
+        CONST_TAIL();
     }
-    else if (lexeme == ID)
+    else if (lexeme == DIGIT_SIGN || lexeme == BIT_SIGN)
+    {
+        lexeme = get_token();
+        DIGIT_TAIL();
+    }
+    else
+    {
+        error();
+    }
+}
+
+void CONST_TAIL()
+{
+    if (lexeme == B_SIGN)
+    {
+        lexeme = get_token();
+        BINARY();
+    }
+    else if (lexeme == X_SIGN)
+    {
+        lexeme = get_token();
+        HEX();
+    }
+    else
+    {
+        DIGIT_TAIL();
+    }
+}
+
+void BINARY()
+{
+    BIT();
+    BIT_TAIL();
+}
+
+void BIT()
+{
+    if (lexeme == ZERO_SIGN || lexeme == BIT_SIGN)
     {
         lexeme = get_token();
     }
     else
+    {
         error();
+    }
 }
+
+void BIT_TAIL()
+{
+    if (lexeme == ZERO_SIGN || lexeme == BIT_SIGN)
+    {
+        BIT();
+        BIT_TAIL();
+    }
+    // Или ε
+}
+
+
+void HEX()
+{
+    HEXDIGIT();
+    HEX_TAIL();
+}
+
+void HEXDIGIT()
+{
+    if (lexeme == DIGIT_SIGN || lexeme == BIT_SIGN || lexeme == ZERO_SIGN || lexeme == HEX_SIGN || lexeme == B_SIGN)
+    {
+        lexeme = get_token();
+    }
+    else
+    {
+        error();
+    }
+}
+
+void HEX_TAIL()
+{
+    if (lexeme == DIGIT_SIGN || lexeme == BIT_SIGN || lexeme == ZERO_SIGN || lexeme == HEX_SIGN || lexeme == B_SIGN)
+    {
+        HEXDIGIT();
+        HEX_TAIL();
+    }
+    // Или ε
+}
+
+
+void DIGIT()
+{
+    if (lexeme == ZERO_SIGN)
+    {
+        lexeme = get_token();
+    }
+    else
+    {
+        NZDIGIT();
+    }
+}
+
+void DIGIT_TAIL()
+{
+    if (lexeme == DIGIT_SIGN || lexeme == BIT_SIGN || lexeme == ZERO_SIGN)
+    {
+        DIGIT();
+        DIGIT_TAIL();
+    }
+    // Или ε
+}
+
+void NZDIGIT()
+{
+    if (lexeme == DIGIT_SIGN || lexeme == BIT_SIGN)
+    {
+        lexeme = get_token();
+    }
+    else
+    {
+        error();
+    }
+}
+
 
 int get_token()
 {
@@ -272,107 +404,81 @@ int get_token()
     while (std::isspace(*g_prog))
         ++g_prog;
 
-    // End of input
+    // End line marker
     if (*g_prog == '\0')
         return EOP;
 
-    // Operators and punctuation
+    // Keywords
     if (*g_prog == '~')
     {
         ++g_prog;
-        return NEG;
+        return NEG_SIGN;
     }
-    if (*g_prog == '*')
+    if (*g_prog == '&')
     {
         ++g_prog;
-        return MUL;
+        return MUL_SIGN;
     }
-    if (*g_prog == '+')
+    if (*g_prog == '|')
     {
         ++g_prog;
-        return ADD;
+        return ADD_SIGN;
     }
     if (*g_prog == '=')
     {
         ++g_prog;
-        return ASSIGN;
+        return ASSIGN_SIGN;
     }
     if (*g_prog == '(')
     {
         ++g_prog;
-        return LPAR;
+        return LPAR_SIGN;
     }
     if (*g_prog == ')')
     {
         ++g_prog;
-        return RPAR;
+        return RPAR_SIGN;
     }
     if (*g_prog == ';')
     {
         ++g_prog;
-        return SEMI;
+        return SEMI_SIGN;
     }
-
-    // ID: 1-2 letters (a-zA-Z)
-    if (std::isalpha(*g_prog))
+    if ((*g_prog >= 'h' && *g_prog < 'x') || (*g_prog >= 'y' && *g_prog <= 'z'))
     {
-        *tok++ = *g_prog++;
-        if (std::isalpha(*g_prog))
-            *tok++ = *g_prog++;
-        *tok = '\0';
-        // Check length: must be 1 or 2
-        if (std::strlen(token) < 1 || std::strlen(token) > 2)
-            return UNDEF;
-        return ID;
+        ++g_prog;
+        return ID_SIGN;
     }
-
-    // CONST: decimal, binary, hex
-    if (std::isdigit(*g_prog))
+    if (*g_prog >= '2' && *g_prog <= '9')
     {
-        bool valid = false;
-        if (*g_prog == '0')
-        {
-            *tok++ = *g_prog++;
-            if (std::tolower(*g_prog) == 'b')  // binary 0b[01]+
-            {
-                *tok++ = *g_prog++;
-                if (*g_prog == '0' || *g_prog == '1')
-                {
-                    valid = true;
-                    while (*g_prog == '0' || *g_prog == '1')
-                        *tok++ = *g_prog++;
-                }
-            }
-            else if (std::tolower(*g_prog) == 'x')  // hex 0x[0-9a-fA-F]+
-            {
-                *tok++ = *g_prog++;
-                if (std::isdigit(*g_prog) || std::tolower(*g_prog) >= 'a' && std::tolower(*g_prog) <= 'f')
-                {
-                    valid = true;
-                    while (std::isdigit(*g_prog) || std::tolower(*g_prog) >= 'a' && std::tolower(*g_prog) <= 'f')
-                        *tok++ = *g_prog++;
-                }
-            }
-            else  // decimal starting with 0, optional more digits
-            {
-                valid = true;
-                while (std::isdigit(*g_prog))
-                    *tok++ = *g_prog++;
-            }
-        }
-        else  // decimal [1-9][0-9]*
-        {
-            valid = true;
-            while (std::isdigit(*g_prog))
-                *tok++ = *g_prog++;
-        }
-        *tok = '\0';
-        // Must have at least one digit, and valid
-        if (std::strlen(token) < 1 || !valid)
-            return UNDEF;
-        return CONST;
+        ++g_prog;
+        return DIGIT_SIGN;
     }
-
+    if (*g_prog == '0')
+    {
+        ++g_prog;
+        return ZERO_SIGN;
+    }
+    if (*g_prog == '1')
+    {
+        ++g_prog;
+        return BIT_SIGN;
+    }
+    if (*g_prog == 'a' || (*g_prog >= 'c' && *g_prog <= 'f'))
+    {
+        ++g_prog;
+        return HEX_SIGN;
+    }
+    if (*g_prog == 'b')
+    {
+        ++g_prog;
+        return B_SIGN;
+    }
+    if (*g_prog == 'x')
+    {
+        ++g_prog;
+        return X_SIGN;
+    }
     return UNDEF;
 }
 
