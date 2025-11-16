@@ -4,5 +4,5 @@
 	<undo_amount>50</undo_amount>&#13;
 	<turing_accept_by_final_state>true</turing_accept_by_final_state>&#13;
 	<turing_accept_by_halt>false</turing_accept_by_halt>&#13;
-	<turing_allow_stay_on_transition>false</turing_allow_stay_on_transition>&#13;
+	<turing_allow_stay_on_transition>true</turing_allow_stay_on_transition>&#13;
 </structure>
