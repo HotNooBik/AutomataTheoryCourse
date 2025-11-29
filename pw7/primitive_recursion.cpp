@@ -1,4 +1,8 @@
 #include <iostream>
+#include <limits>
+
+const int MAX_VAL = std::numeric_limits<int>::max();
+const int MIN_VAL = 0;
 
 /* Примитивные функции */
 
@@ -57,11 +61,16 @@ int pow(int x, int y){
 
 // Основная функция задания
 int f(int x){
+    if (x < MIN_VAL) {
+        return -1;
+    }
     return pow(2, fact(x));
 }
 
 int main(int argc, char* argv[]) {
-    for (int i = 0; i < 5; i++) {
-        std::cout << f(i) << std::endl;
+    std::cout << "f(x) = 2^x! " << std::endl;
+    for (int i = 0; i < 4; i++) {
+        std::cout << "f(" << i << ") = " << f(i) << std::endl;
     }
+
 }
