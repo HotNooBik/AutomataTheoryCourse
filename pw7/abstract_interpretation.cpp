@@ -5,59 +5,86 @@
 #include <algorithm>
 #include <cctype>
 
-const std::string PLUS = "plus";
-const std::string MINUS = "minus";
-const std::string ZERO = "zero";
-const std::string UNKNOWN = "unknown";
+using namespace std;
+
+const string PLUS = "plus";
+const string MINUS = "minus";
+const string ZERO = "zero";
+const string UNKNOWN = "unknown";
 
 // Глобальная карта для хранения знаков переменных
-std::map<std::string, std::string> signs;
+map<string, string> signs;
 
+using TransitionTable = string[4][4];
+
+// Таблица сложения 
+const TransitionTable ADD_TABLE = {
+    //           PLUS    MINUS    ZERO    UNKNOWN
+    /* PLUS */  {PLUS,   UNKNOWN, PLUS,   UNKNOWN},
+    /* MINUS */ {UNKNOWN, MINUS,  MINUS,  UNKNOWN},
+    /* ZERO */  {PLUS,   MINUS,   ZERO,   UNKNOWN},
+    /* UNKNOWN */{UNKNOWN, UNKNOWN, UNKNOWN, UNKNOWN}
+};
+
+// Таблица вычитания
+const TransitionTable SUB_TABLE = {
+    //           PLUS     MINUS   ZERO    UNKNOWN
+    /* PLUS */  {UNKNOWN, PLUS,   PLUS,   UNKNOWN},
+    /* MINUS */ {MINUS,  UNKNOWN, MINUS,  UNKNOWN},
+    /* ZERO */  {MINUS,  PLUS,    ZERO,   UNKNOWN},
+    /* UNKNOWN */{UNKNOWN, UNKNOWN, UNKNOWN, UNKNOWN}
+};
+
+// Таблица умножения
+const TransitionTable MUL_TABLE = {
+    //           PLUS    MINUS   ZERO    UNKNOWN
+    /* PLUS */  {PLUS,   MINUS,  ZERO,   UNKNOWN},
+    /* MINUS */ {MINUS,  PLUS,   ZERO,   UNKNOWN},
+    /* ZERO */  {ZERO,   ZERO,   ZERO,   ZERO},
+    /* UNKNOWN */{UNKNOWN, UNKNOWN, ZERO,  UNKNOWN}
+};
+
+// Таблица деления
+const TransitionTable DIV_TABLE = {
+    //           PLUS    MINUS   ZERO     UNKNOWN
+    /* PLUS */  {PLUS,   MINUS,  UNKNOWN, UNKNOWN},
+    /* MINUS */ {MINUS,  PLUS,   UNKNOWN, UNKNOWN},
+    /* ZERO */  {ZERO,   ZERO,   UNKNOWN, UNKNOWN},
+    /* UNKNOWN */{UNKNOWN, UNKNOWN, UNKNOWN, UNKNOWN}
+};
+
+// Вспомогательная функция для получения индекса
+int get_state_index(const string& s) {
+    if (s == PLUS) return 0;
+    if (s == MINUS) return 1;
+    if (s == ZERO) return 2;
+    return 3; // UNKNOWN
+}
 
 // Абстрактные правила для операций
-std::string abstract_combine(const std::string& x, const std::string& y, char op) {
-    if (x == UNKNOWN || y == UNKNOWN) {
-        return UNKNOWN;
-    }
+string abstract_combine(const string& x, const string& y, char op) {
+    int idx_x = get_state_index(x);
+    int idx_y = get_state_index(y);
 
-    if (op == '+') {
-        if (x == y) return x;
-        if (x == ZERO) return y;
-        if (y == ZERO) return x;
-        return UNKNOWN;
+    switch (op) {
+        case '+':
+            return ADD_TABLE[idx_x][idx_y];
+        case '-':
+            return SUB_TABLE[idx_x][idx_y];
+        case '*':
+            return MUL_TABLE[idx_x][idx_y];
+        case '/':
+            return DIV_TABLE[idx_x][idx_y];
+        default:
+            return UNKNOWN;
     }
-
-    if (op == '-') {
-        if (x == PLUS && y == MINUS) return PLUS;
-        if (x == MINUS && y == PLUS) return MINUS;
-        if (y == ZERO) return x;
-        if (x == ZERO && y == PLUS) return MINUS;
-        if (x == ZERO && y == MINUS) return PLUS;
-        if (x == y) return ZERO;
-        return UNKNOWN;
-    }
-
-    if (op == '*') {
-        if (x == y) return PLUS;
-        if (x == ZERO || y == ZERO) return ZERO;
-        return MINUS;
-    }
-
-    if (op == '/') {
-        if (x == y) return PLUS;
-        if (y == ZERO) return UNKNOWN;
-        if (x == ZERO) return ZERO;
-        return MINUS;
-    }
-
-    return UNKNOWN;
 }
 
 
 /* Вспомогательные функции для работы со строками и числами */
 
 // Определяет знак целого числа
-std::string get_sign_of_digit(int value) {
+string get_sign_of_digit(int value) {
     if (value > 0) {
         return PLUS;
     } else if (value < 0) {
@@ -68,20 +95,20 @@ std::string get_sign_of_digit(int value) {
 }
 
 // Проверяет, является ли строка числом (с учетом знака)
-bool is_digit(const std::string& value) {
+bool is_digit(const string& value) {
     if (value.empty()) {
         return false;
     }
-    std::string s = value;
+    string s = value;
     size_t start = 0;
     if (s[0] == '+' || s[0] == '-') {
         start = 1;
     }
-    return !s.substr(start).empty() && std::all_of(s.begin() + start, s.end(), ::isdigit);
+    return !s.substr(start).empty() && all_of(s.begin() + start, s.end(), ::isdigit);
 }
 
 // Проверяет сбалансированность скобок
-bool check_brackets(const std::string& expr) {
+bool check_brackets(const string& expr) {
     int depth = 0;
     for (char c : expr) {
         if (c == '(') {
@@ -97,9 +124,9 @@ bool check_brackets(const std::string& expr) {
 }
 
 // Рекурсивное вычисление знаков выражений
-std::string determine_sign(const std::string& expr) {
-    std::string clean_expr = expr;
-    clean_expr.erase(std::remove_if(clean_expr.begin(), clean_expr.end(), ::isspace), clean_expr.end());
+string determine_sign(const string& expr) {
+    string clean_expr = expr;
+    clean_expr.erase(remove_if(clean_expr.begin(), clean_expr.end(), ::isspace), clean_expr.end());
 
     if (clean_expr.empty()) {
         return UNKNOWN;
@@ -107,7 +134,7 @@ std::string determine_sign(const std::string& expr) {
 
     if (is_digit(clean_expr)) {
         try {
-            return get_sign_of_digit(std::stoi(clean_expr));
+            return get_sign_of_digit(stoi(clean_expr));
         } catch (...) {
             return UNKNOWN;
         }
@@ -123,7 +150,7 @@ std::string determine_sign(const std::string& expr) {
 
     int depth = 0;
 
-    std::string operators = "+-*/";
+    string operators = "+-*/";
     char main_operator = '\0';
     int index_of_main = -1;
 
@@ -134,7 +161,7 @@ std::string determine_sign(const std::string& expr) {
             depth++;
         } else if (c == '(') {
             depth--;
-        } else if (depth == 0 && operators.find(c) != std::string::npos) {
+        } else if (depth == 0 && operators.find(c) != string::npos) {
             bool is_unary = false;
             
             if (i == 0) {
@@ -142,7 +169,7 @@ std::string determine_sign(const std::string& expr) {
             } 
             else {
                 char prev = clean_expr[i - 1];
-                if (operators.find(prev) != std::string::npos || prev == '(') {
+                if (operators.find(prev) != string::npos || prev == '(') {
                     is_unary = true;
                 }
             }
@@ -171,46 +198,46 @@ std::string determine_sign(const std::string& expr) {
         return UNKNOWN;
     }
 
-    std::string left = clean_expr.substr(0, index_of_main);
-    std::string right = clean_expr.substr(index_of_main + 1);
+    string left = clean_expr.substr(0, index_of_main);
+    string right = clean_expr.substr(index_of_main + 1);
 
-    std::string x = determine_sign(left);
-    std::string y = determine_sign(right);
+    string x = determine_sign(left);
+    string y = determine_sign(right);
 
     return abstract_combine(x, y, main_operator);
 }
 
 // Основная функция анализа
-void analyze(const std::string& procedure) {
+void analyze(const string& procedure) {
     signs.clear();
-    std::stringstream ss(procedure);
-    std::string line;
+    stringstream ss(procedure);
+    string line;
 
-    while (std::getline(ss, line, '\n')) {
-        line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
-        if (line.empty() || line.find('=') == std::string::npos) {
+    while (getline(ss, line, '\n')) {
+        line.erase(remove_if(line.begin(), line.end(), ::isspace), line.end());
+        if (line.empty() || line.find('=') == string::npos) {
             continue;
         }
 
         size_t eq_pos = line.find('=');
-        std::string left = line.substr(0, eq_pos);
-        std::string right = line.substr(eq_pos + 1);
+        string left = line.substr(0, eq_pos);
+        string right = line.substr(eq_pos + 1);
 
-        std::string var = left;
-        std::string expr = right;
+        string var = left;
+        string expr = right;
 
         signs[var] = determine_sign(expr);
     }
 
-    std::cout << "\nProcedure:" << procedure << std::endl;
-    std::cout << "Signs of variables:" << std::endl;
+    cout << "\nProcedure:" << procedure << endl;
+    cout << "Signs of variables:" << endl;
     for (const auto& pair : signs) {
-        std::cout << pair.first << ": " << pair.second << std::endl;
+        cout << pair.first << ": " << pair.second << endl;
     }
 }
 
 int main() {
-    std::string procedure = R"(
+    string procedure = R"(
 a = 1
 b = -1
 c = a + b
